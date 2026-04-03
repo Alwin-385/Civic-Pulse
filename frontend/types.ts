@@ -1,7 +1,7 @@
 
 export enum UserRole {
-  CITIZEN = 'Citizen',
-  OFFICIAL = 'Official'
+  CITIZEN = 'CITIZEN',
+  OFFICIAL = 'OFFICIAL'
 }
 
 export enum IssueStatus {

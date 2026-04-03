@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Civic Connect</title>
+    <title>Civic Pulse</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&display=swap" rel="stylesheet" />
@@ -35,6 +35,15 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .ios-blur { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+        html.dark {
+            filter: invert(1) hue-rotate(180deg);
+        }
+        html.dark img, html.dark video {
+            filter: invert(1) hue-rotate(180deg);
+        }
+        html.high-contrast {
+            filter: contrast(130%) saturate(130%);
+        }
     </style>
 <script type="importmap">
 {

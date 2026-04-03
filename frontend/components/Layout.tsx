@@ -35,7 +35,7 @@ interface BottomNavProps {
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({ activeTab, onTabChange, tabs, centerAction }) => (
-  <nav className="fixed bottom-0 w-full max-w-md bg-white/95 backdrop-blur-xl border-t border-slate-100 px-6 pt-2 pb-8 flex items-center justify-between z-40">
+  <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white/95 backdrop-blur-xl border-t border-slate-100 px-6 pt-2 pb-8 flex items-center justify-between z-40">
     {tabs.slice(0, 2).map(tab => (
       <button
         key={tab.id}

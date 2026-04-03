@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CITIZEN
+  OFFICIAL
+}
+
+enum ComplaintStatus {
+  REPORTED
+  ACKNOWLEDGED
+  DISPATCHED
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum DepartmentType {
+  KSEB
+  PWD
+}
+
+model User {
+  id         Int         @id @default(autoincrement())
+  name       String
+  email      String      @unique
+  password   String
+  role       UserRole
+  createdAt  DateTime    @default(now())
+
+  phone      String?
+  address    String?
+  bio        String?
+
+  complaints Complaint[]
+  notifications Notification[]
+  feedbacks  Feedback[]
+  statusUpdates ComplaintStatusHistory[]
+
+  // Email verification for first-time registration
+  emailVerifiedAt DateTime?
+  otpCodeHash     String?
+  otpExpiresAt    DateTime?
+
+  // Google OAuth
+  googleId String? @unique
+}
+
+model Department {
+  id          Int              @id @default(autoincrement())
+  name        DepartmentType   @unique
+  description String?
+  createdAt   DateTime         @default(now())
+
+  complaints  Complaint[]
+  staff       Staff[]
+}
+
+model Staff {
+  id            Int        @id @default(autoincrement())
+  name          String
+  email         String?    @unique
+  role          String
+  status        String
+  workload      Int        @default(0)
+  maxWorkload   Int        @default(5)
+  location      String?
+  phone         String?
+  avatarUrl     String?
+  createdAt     DateTime   @default(now())
+
+  departmentId  Int
+  department    Department @relation(fields: [departmentId], references: [id])
+
+  assignments   Complaint[] @relation("ComplaintAssignedStaff")
+}
+
+model Complaint {
+  id              Int                    @id @default(autoincrement())
+  title           String
+  description     String
+  location        String
+  latitude        Float?
+  longitude       Float?
+  imageUrl        String?
+  severity        String
+  status          ComplaintStatus       @default(REPORTED)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  userId          Int
+  user            User                  @relation(fields: [userId], references: [id])
+
+  departmentId    Int
+  department      Department            @relation(fields: [departmentId], references: [id])
+
+  assignedStaffId Int?
+  assignedStaff   Staff?                @relation("ComplaintAssignedStaff", fields: [assignedStaffId], references: [id])
+
+  statusHistory   ComplaintStatusHistory[]
+  notifications   Notification[]
+  feedback        Feedback?
+}
+
+model ComplaintStatusHistory {
+  id          Int             @id @default(autoincrement())
+  status      ComplaintStatus
+  note        String?
+  createdAt   DateTime        @default(now())
+
+  complaintId Int
+  complaint   Complaint       @relation(fields: [complaintId], references: [id])
+
+  updatedById Int?
+  updatedBy   User?           @relation(fields: [updatedById], references: [id])
+}
+
+model Notification {
+  id          Int        @id @default(autoincrement())
+  userId      Int
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message     String
+  createdAt   DateTime   @default(now())
+  readAt      DateTime?
+  complaintId Int?
+  complaint   Complaint? @relation(fields: [complaintId], references: [id], onDelete: SetNull)
+}
+
+model Feedback {
+  id          Int      @id @default(autoincrement())
+  complaintId Int     @unique
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating      Int
+  comment     String?
+  createdAt   DateTime @default(now())
+}

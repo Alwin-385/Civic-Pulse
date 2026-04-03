@@ -1,0 +1,261 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.updateComplaintStatus = exports.getMyComplaintById = exports.getMyComplaints = exports.getComplaintById = exports.getAllComplaints = exports.createComplaint = void 0;
+const prisma_1 = __importDefault(require("../config/prisma"));
+const email_1 = require("../utils/email");
+const createComplaint = async (req, res) => {
+    try {
+        const { title, description, location, severity, departmentId, imageUrl } = req.body;
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        if (!title || !description || !location || !severity || !departmentId) {
+            return res.status(400).json({ message: "Missing required fields" });
+        }
+        const complaint = await prisma_1.default.complaint.create({
+            data: {
+                title,
+                description,
+                location,
+                severity,
+                imageUrl,
+                userId: req.user.id,
+                departmentId: Number(departmentId),
+            },
+            include: {
+                user: true,
+                department: true,
+            },
+        });
+        await prisma_1.default.complaintStatusHistory.create({
+            data: {
+                complaintId: complaint.id,
+                status: "REPORTED",
+                note: "Complaint created by user",
+            },
+        });
+        // Cursor's TS diagnostics sometimes lag Prisma client generation; runtime type is correct.
+        await prisma_1.default.notification.create({
+            data: {
+                userId: req.user.id,
+                message: `Complaint #${complaint.id} submitted. Status: REPORTED.`,
+                complaintId: complaint.id,
+            },
+        });
+        await (0, email_1.sendEmail)({
+            to: complaint.user.email,
+            subject: `Complaint submitted (#${complaint.id})`,
+            text: `Your complaint has been submitted.\n\nTracking ID: ${complaint.id}\nStatus: REPORTED\nDepartment: ${complaint.department?.name ?? "-"}\n\nWe will notify you when a technician is assigned and the status changes.`,
+        });
+        return res.status(201).json({
+            message: "Complaint created successfully",
+            complaint,
+        });
+    }
+    catch (error) {
+        return res.status(500).json({
+            message: "Failed to create complaint",
+            error,
+        });
+    }
+};
+exports.createComplaint = createComplaint;
+const getAllComplaints = async (_req, res) => {
+    try {
+        const complaints = await prisma_1.default.complaint.findMany({
+            include: {
+                user: true,
+                department: true,
+                assignedStaff: true,
+                statusHistory: true,
+            },
+            orderBy: {
+                createdAt: "desc",
+            },
+        });
+        return res.status(200).json(complaints);
+    }
+    catch (error) {
+        return res.status(500).json({
+            message: "Failed to fetch complaints",
+            error,
+        });
+    }
+};
+exports.getAllComplaints = getAllComplaints;
+const getComplaintById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const complaint = await prisma_1.default.complaint.findUnique({
+            where: {
+                id: Number(id),
+            },
+            include: {
+                user: true,
+                department: true,
+                assignedStaff: true,
+                statusHistory: true,
+            },
+        });
+        if (!complaint) {
+            return res.status(404).json({ message: "Complaint not found" });
+        }
+        return res.status(200).json(complaint);
+    }
+    catch (error) {
+        return res.status(500).json({
+            message: "Failed to fetch complaint",
+            error,
+        });
+    }
+};
+exports.getComplaintById = getComplaintById;
+const getMyComplaints = async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        const complaints = await prisma_1.default.complaint.findMany({
+            where: { userId: req.user.id },
+            include: {
+                department: true,
+                assignedStaff: true,
+                statusHistory: {
+                    orderBy: { createdAt: "desc" },
+                },
+                feedback: true,
+            },
+            orderBy: {
+                createdAt: "desc",
+            },
+        });
+        return res.status(200).json(complaints);
+    }
+    catch (error) {
+        return res.status(500).json({
+            message: "Failed to fetch my complaints",
+            error,
+        });
+    }
+};
+exports.getMyComplaints = getMyComplaints;
+const getMyComplaintById = async (req, res) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        const { id } = req.params;
+        const complaint = await prisma_1.default.complaint.findUnique({
+            where: {
+                id: Number(id),
+            },
+            include: {
+                department: true,
+                assignedStaff: true,
+                statusHistory: {
+                    orderBy: { createdAt: "desc" },
+                },
+                feedback: true,
+            },
+        });
+        if (!complaint) {
+            return res.status(404).json({ message: "Complaint not found" });
+        }
+        if (complaint.userId !== req.user.id) {
+            return res.status(403).json({ message: "Access denied" });
+        }
+        return res.status(200).json(complaint);
+    }
+    catch (error) {
+        return res.status(500).json({
+            message: "Failed to fetch complaint",
+            error,
+        });
+    }
+};
+exports.getMyComplaintById = getMyComplaintById;
+const updateComplaintStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status, note } = req.body;
+        if (!req.user) {
+            return res.status(401).json({ message: "Unauthorized" });
+        }
+        const complaintId = Number(id);
+        const existingComplaint = await prisma_1.default.complaint.findUnique({
+            where: { id: complaintId },
+            select: { assignedStaffId: true, userId: true },
+        });
+        if (!existingComplaint) {
+            return res.status(404).json({ message: "Complaint not found" });
+        }
+        const updatedComplaint = await prisma_1.default.complaint.update({
+            where: { id: complaintId },
+            data: {
+                status: status,
+                assignedStaffId: status === "RESOLVED" ? null : undefined,
+            },
+        });
+        await prisma_1.default.complaintStatusHistory.create({
+            data: {
+                complaintId: complaintId,
+                status: status,
+                note: note || "Status updated",
+            },
+        });
+        // If resolved, reduce staff workload (best-effort) to keep dashboard accurate.
+        if (status === "RESOLVED" && existingComplaint.assignedStaffId) {
+            const staff = await prisma_1.default.staff.findUnique({
+                where: { id: existingComplaint.assignedStaffId },
+                select: { workload: true },
+            });
+            if (staff) {
+                const nextWorkload = Math.max(0, (staff.workload ?? 0) - 1);
+                await prisma_1.default.staff.update({
+                    where: { id: existingComplaint.assignedStaffId },
+                    data: { workload: nextWorkload },
+                });
+            }
+        }
+        // Cursor's TS diagnostics sometimes lag Prisma client generation; runtime type is correct.
+        await prisma_1.default.notification.create({
+            data: {
+                userId: existingComplaint.userId,
+                message: `Complaint #${complaintId} status updated to ${status}.`,
+                complaintId: complaintId,
+            },
+        });
+        const user = await prisma_1.default.user.findUnique({
+            where: { id: existingComplaint.userId },
+            select: { email: true },
+        });
+        if (user?.email) {
+            const statusLabel = status === "RESOLVED"
+                ? "Resolved"
+                : status === "IN_PROGRESS"
+                    ? "In Progress"
+                    : status === "ACKNOWLEDGED"
+                        ? "Acknowledged"
+                        : String(status);
+            await (0, email_1.sendEmail)({
+                to: user.email,
+                subject: `Complaint #${complaintId} status: ${statusLabel}`,
+                text: `Update for your complaint.\n\nTracking ID: ${complaintId}\nStatus: ${statusLabel}\n\n${note ? `Note: ${note}\n` : ""}Thank you for using Civic Connect.`,
+            });
+        }
+        return res.status(200).json({
+            message: "Complaint status updated successfully",
+            complaint: updatedComplaint,
+        });
+    }
+    catch (error) {
+        return res.status(500).json({
+            message: "Failed to update complaint status",
+            error,
+        });
+    }
+};
+exports.updateComplaintStatus = updateComplaintStatus;
