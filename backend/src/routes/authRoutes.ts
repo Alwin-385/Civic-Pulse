@@ -23,16 +23,19 @@ router.get("/google", (req, res, next) => {
   })(req, res, next);
 });
 
+const isProd = process.env.RENDER || process.env.NODE_ENV === "production";
+const FRONTEND_URL = isProd ? "https://civic-pulse-platform.vercel.app" : "http://localhost:3000";
+
 router.get(
   "/google/callback",
   passport.authenticate("google", {
-    failureRedirect: `${process.env.FRONTEND_ORIGIN ?? "http://localhost:3000"}/`,
+    failureRedirect: `${FRONTEND_URL}/`,
     session: false,
   }),
   (req, res) => {
     const user = (req as any).user as any;
     if (!user) {
-      return res.redirect(`${process.env.FRONTEND_ORIGIN ?? "http://localhost:3000"}/`);
+      return res.redirect(`${FRONTEND_URL}/`);
     }
 
     const token = jwt.sign(
@@ -43,14 +46,12 @@ router.get(
 
     res.cookie("token", token, {
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      secure: process.env.NODE_ENV === "production",
+      sameSite: isProd ? "none" : "lax",
+      secure: !!isProd,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
-    // Hardcoding the Vercel URL ensures that even if Render's env var is missing, it still redirects properly
-    const vercelProdUrl = "https://civic-pulse-platform.vercel.app";
-    const origin = (process.env.FRONTEND_ORIGIN ?? vercelProdUrl).replace(/\/$/, "");
-    res.redirect(`${origin}/?token=${token}`);
+
+    res.redirect(`${FRONTEND_URL}/?token=${token}`);
   }
 );
 
