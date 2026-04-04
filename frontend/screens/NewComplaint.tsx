@@ -125,6 +125,7 @@ const NewComplaint: React.FC<NewComplaintProps> = ({ onBack }) => {
         },
       });
 
+      alert('Complaint has been submitted successfully!');
       onBack();
     } catch (e: any) {
       setError(e?.message ?? 'Failed to submit complaint');

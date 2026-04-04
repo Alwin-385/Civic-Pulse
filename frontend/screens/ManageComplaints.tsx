@@ -67,6 +67,7 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
   const [updateStatus, setUpdateStatus] = useState<string>('ACKNOWLEDGED');
   const [note, setNote] = useState<string>('');
   const [isExporting, setIsExporting] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const refresh = async () => {
     setLoading(true);
@@ -139,22 +140,38 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
 
   const assignToStaff = async () => {
     if (!reviewComplaint || !assignStaffId) return;
-    await apiRequest('/api/assignments', {
-      method: 'POST',
-      body: { complaintId: reviewComplaint.id, staffId: assignStaffId },
-    });
-    await refresh();
-    setReviewOpen(false);
+    setActionLoading(true);
+    try {
+      await apiRequest('/api/assignments', {
+        method: 'POST',
+        body: { complaintId: reviewComplaint.id, staffId: assignStaffId },
+      });
+      alert('Staff personnel has been dispatched successfully!');
+      await refresh();
+      setReviewOpen(false);
+    } catch (e: any) {
+      alert("Failed to dispatch staff: " + e.message);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const updateStatusForComplaint = async () => {
     if (!reviewComplaint) return;
-    await apiRequest(`/api/complaints/${reviewComplaint.id}/status`, {
-      method: 'PATCH',
-      body: { status: updateStatus, note: note.trim() || undefined },
-    });
-    await refresh();
-    setReviewOpen(false);
+    setActionLoading(true);
+    try {
+      await apiRequest(`/api/complaints/${reviewComplaint.id}/status`, {
+        method: 'PATCH',
+        body: { status: updateStatus, note: note.trim() || undefined },
+      });
+      alert('Complaint status has been updated successfully!');
+      await refresh();
+      setReviewOpen(false);
+    } catch (e: any) {
+      alert("Failed to update status: " + e.message);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const exportComplaintPdf = () => {
@@ -580,11 +597,11 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
                       <button
                         type="button"
                         onClick={assignToStaff}
-                        disabled={!assignStaffId}
+                        disabled={!assignStaffId || actionLoading}
                         className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl shadow-md hover:bg-slate-800 disabled:opacity-50 transition-all flex justify-center items-center gap-2"
                       >
-                        <span className="material-symbols-outlined text-[18px]">engineering</span>
-                        Dispatch Personnel
+                        {actionLoading ? <span className="material-symbols-outlined text-[18px] animate-spin">refresh</span> : <span className="material-symbols-outlined text-[18px]">engineering</span>}
+                        {actionLoading ? 'Dispatching...' : 'Dispatch Personnel'}
                       </button>
                     </div>
                   </div>
@@ -609,9 +626,11 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
                       <button
                         type="button"
                         onClick={updateStatusForComplaint}
-                        className="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-xl shadow-md shadow-indigo-600/20 hover:bg-indigo-700 transition-all"
+                        disabled={actionLoading}
+                        className="w-full bg-indigo-600 text-white font-bold py-3.5 rounded-xl shadow-md shadow-indigo-600/20 hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
                       >
-                        Update
+                        {actionLoading ? <span className="material-symbols-outlined text-[18px] animate-spin">refresh</span> : null}
+                        {actionLoading ? 'Updating...' : 'Update'}
                       </button>
                     </div>
                     <textarea

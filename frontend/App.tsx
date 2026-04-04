@@ -20,6 +20,17 @@ const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<string>('DASHBOARD');
 
   useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
+    
+    if (urlToken) {
+      setStoredAuth(urlToken);
+      setToken(urlToken);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
     if (token && !role) {
       const payload = decodeJwtPayload(token);
       const decodedRole =
