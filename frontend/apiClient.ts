@@ -64,6 +64,12 @@ export async function apiRequest<T>(
   const payload = text ? JSON.parse(text) : null;
 
   if (!res.ok) {
+    if (res.status === 401 || res.status === 403 || payload?.message?.includes('Invalid token') || payload?.message?.includes('No token')) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      localStorage.removeItem("userId");
+      window.location.href = "/";
+    }
     throw toJsonError(payload);
   }
 
