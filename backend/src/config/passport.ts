@@ -8,7 +8,7 @@ export const configurePassport = () => {
       {
         clientID: process.env.GOOGLE_CLIENT_ID as string,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-        callbackURL: process.env.GOOGLE_REDIRECT_URL as string,
+        callbackURL: (process.env.RENDER || process.env.NODE_ENV === 'production') ? 'https://civic-pulse-ak6s.onrender.com/api/auth/google/callback' : (process.env.GOOGLE_REDIRECT_URL as string),
         passReqToCallback: true,
       },
       async (
