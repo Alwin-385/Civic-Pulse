@@ -8,6 +8,13 @@ The application provides a seamless pipeline for citizens to instantly report, g
 
 ---
 
+## 🌐 Live Demo
+
+Frontend (User Portal): https://civic-pulse-platform.vercel.app  
+Backend API: https://civic-pulse-ak6s.onrender.com  
+
+---
+
 ## ⚡ Features
 
 ### 🧑‍🤝‍🧑 Citizen Portal
