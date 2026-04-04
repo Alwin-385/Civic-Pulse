@@ -6,7 +6,7 @@ type ApiError = {
 const isLocalDesktop = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || (isLocalDesktop ? 'http://localhost:5000' : 'https://civic-pulse-ak6s.onrender.com');
+  (import.meta as any).env.VITE_API_BASE_URL || (isLocalDesktop ? 'http://localhost:5000' : 'https://civic-pulse-ak6s.onrender.com');
 
 export function getApiBaseUrl() {
   return API_BASE_URL;
