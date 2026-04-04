@@ -1,0 +1,16 @@
+{
+  "short_name": "Civic Pulse",
+  "name": "Civic Pulse Issue Network",
+  "description": "Government-grade civic issue reporting and tracking platform.",
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#1e293b",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}

@@ -48,7 +48,8 @@ router.get(
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    res.redirect(`${process.env.FRONTEND_ORIGIN ?? "http://localhost:3000"}/?token=${token}`);
+    const origin = (process.env.FRONTEND_ORIGIN ?? "http://localhost:3000").replace(/\/$/, "");
+    res.redirect(`${origin}/?token=${token}`);
   }
 );
 
