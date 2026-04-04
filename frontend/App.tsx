@@ -24,8 +24,21 @@ const App: React.FC = () => {
     const urlToken = urlParams.get('token');
     
     if (urlToken) {
-      setStoredAuth(urlToken);
-      setToken(urlToken);
+      try {
+        setStoredAuth(urlToken);
+        setToken(urlToken);
+        
+        const payload = decodeJwtPayload(urlToken);
+        if (!payload) {
+           alert("Auth Error: Could not decode JWT token securely. Please use Email login.");
+        } else if (!payload.role) {
+           alert("Auth Error: No role found in payload: " + JSON.stringify(payload));
+        } else {
+           alert("Login successful! Welcome back.");
+        }
+      } catch (e: any) {
+        alert("Critial Parse Error: " + e.message);
+      }
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
