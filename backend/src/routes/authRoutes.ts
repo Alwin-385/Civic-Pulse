@@ -47,8 +47,9 @@ router.get(
       secure: process.env.NODE_ENV === "production",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
-
-    const origin = (process.env.FRONTEND_ORIGIN ?? "http://localhost:3000").replace(/\/$/, "");
+    // Hardcoding the Vercel URL ensures that even if Render's env var is missing, it still redirects properly
+    const vercelProdUrl = "https://civic-pulse-platform.vercel.app";
+    const origin = (process.env.FRONTEND_ORIGIN ?? vercelProdUrl).replace(/\/$/, "");
     res.redirect(`${origin}/?token=${token}`);
   }
 );
