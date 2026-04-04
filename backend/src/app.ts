@@ -29,7 +29,7 @@ app.use(morgan("dev"));
 app.use(limiter);
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN,
+    origin: [process.env.CORS_ORIGIN || "http://localhost:3000", "https://civic-pulse-platform.vercel.app", /\.vercel\.app$/],
     credentials: true,
   })
 );
