@@ -1,5 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { apiRequest } from '../apiClient';
+
+const SUPPORT_ENQUIRY_EMAIL =
+  import.meta.env.VITE_SUPPORT_ENQUIRY_EMAIL ?? 'civicissueofficial.app@gmail.com';
+
+function gmailComposeUrl(to: string, subject: string) {
+  const params = new URLSearchParams({
+    view: 'cm',
+    fs: '1',
+    to,
+    su: subject,
+  });
+  return `https://mail.google.com/mail/?${params.toString()}`;
+}
 
 export const Settings: React.FC<{
   onNavigate?: (screen: string) => void;
@@ -20,6 +33,11 @@ export const Settings: React.FC<{
   
   const [language, setLanguage] = useState('English');
   const [dataSaver, setDataSaver] = useState(false);
+
+  const helpSupportHref = useMemo(
+    () => gmailComposeUrl(SUPPORT_ENQUIRY_EMAIL, 'Civic Pulse — Help & Support'),
+    []
+  );
 
   useEffect(() => {
     if (darkMode) {
@@ -215,7 +233,12 @@ export const Settings: React.FC<{
         <section className="space-y-2">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 ml-1">More</h3>
           <div className="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-sm">
-            <a href="mailto:kseb@kerala.gov.in" className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+            <a
+              href={helpSupportHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full p-4 flex items-center justify-between hover:bg-slate-50 transition-colors"
+            >
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-cyan-50 text-cyan-600 rounded-xl">
                   <span className="material-symbols-outlined text-[20px]">help_center</span>
