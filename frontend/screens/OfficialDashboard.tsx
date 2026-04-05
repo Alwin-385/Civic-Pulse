@@ -9,7 +9,40 @@ import { format } from 'date-fns';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.heat';
 import html2canvas from 'html2canvas';
+
+/** Keeps the view on Kerala while still allowing pan/zoom inside the state. */
+const KERALA_BOUNDS: L.LatLngBoundsExpression = [
+  [8.08, 74.42],
+  [12.82, 77.58],
+];
+
+type HeatPoint = [number, number, number];
+
+function ComplaintHeatmapLayer({ points }: { points: HeatPoint[] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (points.length === 0) return;
+    const heatLayer = (L as typeof L & { heatLayer: (p: HeatPoint[], o?: Record<string, unknown>) => L.Layer }).heatLayer(
+      points,
+      {
+        radius: 32,
+        blur: 22,
+        maxZoom: 18,
+        minOpacity: 0.35,
+        gradient: { 0.35: '#1d4ed8', 0.55: '#16a34a', 0.72: '#ca8a04', 0.9: '#dc2626' },
+      }
+    );
+    map.addLayer(heatLayer);
+    return () => {
+      map.removeLayer(heatLayer);
+    };
+  }, [map, points]);
+
+  return null;
+}
 
 const BAR_DATA = [
   { name: 'JAN', value: 40 },
@@ -196,6 +229,28 @@ const OfficialDashboard: React.FC<OfficialDashboardProps> = ({ onNavigate, onLog
     }));
   }, [stats]);
 
+  const geoComplaints = useMemo(
+    () =>
+      complaintList.filter(
+        (c) =>
+          typeof c.latitude === 'number' &&
+          typeof c.longitude === 'number' &&
+          Number.isFinite(c.latitude) &&
+          Number.isFinite(c.longitude)
+      ),
+    [complaintList]
+  );
+
+  const heatPoints = useMemo((): HeatPoint[] => {
+    return geoComplaints.map((c) => {
+      const sev = String(c.severity ?? '').toUpperCase();
+      let intensity = 1;
+      if (sev.includes('CRITICAL')) intensity = 3;
+      else if (sev.includes('HIGH')) intensity = 2;
+      return [c.latitude as number, c.longitude as number, intensity];
+    });
+  }, [geoComplaints]);
+
   return (
     <div className="flex-1 flex flex-col bg-[#f0f4f8] font-sans">
       
@@ -379,28 +434,51 @@ const OfficialDashboard: React.FC<OfficialDashboardProps> = ({ onNavigate, onLog
           </div>
 
           <div className="rounded-2xl bg-white/90 backdrop-blur-xl p-4 shadow-sm border border-slate-100 flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-slate-900 text-base font-black tracking-tight">Geo-Spatial Analysis</h3>
-              <span className="material-symbols-outlined text-indigo-600 text-xl">map</span>
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div>
+                <h3 className="text-slate-900 text-base font-black tracking-tight">Kerala — complaint heatmap</h3>
+                <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                  Live OpenStreetMap · Brighter areas = more reports (weighted by severity)
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  {geoComplaints.length} with coordinates
+                  {complaintList.length > geoComplaints.length
+                    ? ` · ${complaintList.length - geoComplaints.length} without map position`
+                    : ''}
+                </p>
+              </div>
+              <span className="material-symbols-outlined text-indigo-600 text-xl shrink-0">map</span>
             </div>
             <div className="relative w-full flex-1 min-h-[300px] rounded-xl overflow-hidden bg-slate-100 z-0">
-               <MapContainer 
-                  center={[10.8505, 76.2711]} // Kerala Center By Default
-                  zoom={7} 
+               <MapContainer
+                  center={[10.15, 76.27]}
+                  zoom={7}
+                  minZoom={6}
+                  maxZoom={12}
+                  maxBounds={KERALA_BOUNDS}
+                  maxBoundsViscosity={0.85}
                   style={{ height: '100%', width: '100%' }}
-                  attributionControl={false}
+                  scrollWheelZoom
                >
-                  <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" />
-                  {complaintList.filter(c => c.latitude && c.longitude).map(c => {
-                      const color = c.status === 'RESOLVED' ? 'rgba(16, 185, 129, 0.9)' : 
-                                    (c.severity === 'Critical' || c.severity === 'High') ? 'rgba(239, 68, 68, 0.9)' : 
-                                    'rgba(245, 158, 11, 0.9)';
-                      
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  />
+                  {heatPoints.length > 0 ? <ComplaintHeatmapLayer points={heatPoints} /> : null}
+                  {geoComplaints.map((c) => {
+                      const sev = String(c.severity ?? '').toUpperCase();
+                      const color =
+                        c.status === 'RESOLVED'
+                          ? 'rgba(16, 185, 129, 0.95)'
+                          : sev.includes('CRITICAL') || sev.includes('HIGH')
+                            ? 'rgba(239, 68, 68, 0.95)'
+                            : 'rgba(245, 158, 11, 0.95)';
+
                       const customMarker = L.divIcon({
                           className: 'custom-pin',
-                          html: `<div style="background-color: ${color}; width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 0 4px rgba(255,255,255,0.8), 0 4px 6px rgba(0,0,0,0.3);"></div>`,
-                          iconSize: [14, 14],
-                          iconAnchor: [7, 7]
+                          html: `<div style="background-color: ${color}; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(255,255,255,0.85), 0 2px 4px rgba(0,0,0,0.25);"></div>`,
+                          iconSize: [12, 12],
+                          iconAnchor: [6, 6]
                       });
 
                       return (
