@@ -6,7 +6,7 @@ interface LoginProps {
   onLogin: (auth: { token: string; role: UserRole }) => void;
 }
 
-type Mode = 'signin' | 'register' | 'forgot';
+type Mode = 'signin' | 'register' | 'forgot' | 'verify' | 'reset';
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [mode, setMode] = useState<Mode>('signin');
@@ -15,37 +15,127 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  const handleResendOtp = async () => {
+    if (!email.trim()) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const data = await apiRequest<{ message: string; devOtp?: string }>('/api/auth/resend-otp', {
+        method: 'POST',
+        body: { email: email.trim() },
+      });
+      let msg = data.message || 'A new code has been sent.';
+      if (data.devOtp) {
+        msg += ` (dev: ${data.devOtp})`;
+      }
+      setSuccessMsg(msg);
+    } catch (e: any) {
+      setError(e?.message ?? 'Could not resend code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendResetCode = async () => {
+    if (!email.trim()) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const data = await apiRequest<{ message: string; devOtp?: string }>('/api/auth/forgot-password', {
+        method: 'POST',
+        body: { email: email.trim() },
+      });
+      let msg = data.message || 'A new reset code has been sent.';
+      if (data.devOtp) {
+        msg += ` (dev: ${data.devOtp})`;
+      }
+      setSuccessMsg(msg);
+    } catch (e: any) {
+      setError(e?.message ?? 'Could not send reset code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSuccessMsg(null);
+    if (mode !== 'verify' && mode !== 'reset') setSuccessMsg(null);
     setLoading(true);
 
     try {
+      if (mode === 'verify') {
+        const code = otp.replace(/\D/g, '').slice(0, 6);
+        if (code.length !== 6) {
+          setError('Enter the 6-digit code from your email.');
+          setLoading(false);
+          return;
+        }
+        await apiRequest<{ message: string }>('/api/auth/verify-email', {
+          method: 'POST',
+          body: { email: email.trim(), code },
+        });
+        setOtp('');
+        setMode('signin');
+        setSuccessMsg('Email verified. You can sign in now.');
+        return;
+      }
+
       if (mode === 'register') {
         const data = await apiRequest<{
           message: string;
           verificationRequired: boolean;
           email: string;
+          devOtp?: string;
         }>('/api/auth/register', {
           method: 'POST',
           body: { name, email, password, role },
         });
 
-        setMode('signin');
-        setSuccessMsg(data.message || 'Account created successfully! Please sign in.');
+        if (data.verificationRequired) {
+          setMode('verify');
+          let msg = data.message || 'Check your email for a verification code.';
+          if (data.devOtp) {
+            msg += ` (dev: ${data.devOtp})`;
+          }
+          setSuccessMsg(msg);
+        } else {
+          setMode('signin');
+          setSuccessMsg(data.message || 'Account created successfully! Please sign in.');
+        }
       } else if (mode === 'forgot') {
-        // Mock password reset
-        setTimeout(() => {
-          setSuccessMsg('If the email exists, a reset link has been sent.');
+        const data = await apiRequest<{ message: string; devOtp?: string }>('/api/auth/forgot-password', {
+          method: 'POST',
+          body: { email: email.trim() },
+        });
+        let msg = data.message || 'Check your email for a reset code.';
+        if (data.devOtp) {
+          msg += ` (dev: ${data.devOtp})`;
+        }
+        setOtp('');
+        setPassword('');
+        setSuccessMsg(msg);
+        setMode('reset');
+      } else if (mode === 'reset') {
+        const code = otp.replace(/\D/g, '').slice(0, 6);
+        if (code.length !== 6) {
+          setError('Enter the 6-digit code from your email.');
           setLoading(false);
-          setEmail('');
-        }, 1500);
-        return;
+          return;
+        }
+        const data = await apiRequest<{ message: string }>('/api/auth/reset-password', {
+          method: 'POST',
+          body: { email: email.trim(), code, newPassword: password },
+        });
+        setOtp('');
+        setPassword('');
+        setMode('signin');
+        setSuccessMsg(data.message || 'Password updated. You can sign in now.');
       } else {
         const data = await apiRequest<{ token: string; user: any }>('/api/auth/login', {
           method: 'POST',
@@ -55,7 +145,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         onLogin({ token: data.token, role: data.user.role });
       }
     } catch (e: any) {
-      setError(e?.message ?? 'An error occurred. Please try again.');
+      if (e?.verificationRequired && e?.email) {
+        setMode('verify');
+        setEmail(String(e.email));
+        setSuccessMsg(e.message || 'Please verify your email to continue.');
+        setError(null);
+      } else {
+        setError(e?.message ?? 'An error occurred. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -129,14 +226,26 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           
           <div className="space-y-2">
             <h2 className="text-3xl font-bold tracking-tight text-slate-900">
-              {mode === 'signin' ? 'Welcome back' : mode === 'forgot' ? 'Reset password' : 'Create an account'}
+              {mode === 'signin'
+                ? 'Welcome back'
+                : mode === 'forgot'
+                  ? 'Reset password'
+                  : mode === 'reset'
+                    ? 'Choose a new password'
+                    : mode === 'verify'
+                      ? 'Verify your email'
+                      : 'Create an account'}
             </h2>
             <p className="text-slate-500 text-sm font-medium">
-              {mode === 'signin' 
-                ? 'Enter your details to access your dashboard.' 
-                : mode === 'forgot' 
-                  ? 'We will send you a secure link to reset.' 
-                  : 'Start reporting issues in seconds.'}
+              {mode === 'signin'
+                ? 'Enter your details to access your dashboard.'
+                : mode === 'forgot'
+                  ? 'We will email you a 6-digit code to reset your password.'
+                  : mode === 'reset'
+                    ? 'Enter the code from your email and your new password below.'
+                    : mode === 'verify'
+                      ? 'Enter the 6-digit code we sent to your inbox.'
+                      : 'Start reporting issues in seconds.'}
             </p>
           </div>
 
@@ -189,22 +298,106 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               </div>
             )}
 
-            <div className="space-y-1.5 group">
-              <label className="text-xs font-bold uppercase tracking-wider text-slate-500 ml-1 group-focus-within:text-indigo-600 transition-colors">Email Address</label>
-              <div className="relative">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">alternate_email</span>
-                <input
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-400 shadow-sm font-medium"
-                  placeholder="name@example.com"
-                  type="email"
-                />
+            {(mode === 'signin' || mode === 'register' || mode === 'forgot') && (
+              <div className="space-y-1.5 group">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 ml-1 group-focus-within:text-indigo-600 transition-colors">Email Address</label>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">alternate_email</span>
+                  <input
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-400 shadow-sm font-medium"
+                    placeholder="name@example.com"
+                    type="email"
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
-            {mode !== 'forgot' && (
+            {mode === 'verify' && (
+              <>
+                <div className="space-y-1.5 group">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 ml-1">Email Address</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">alternate_email</span>
+                    <input
+                      readOnly
+                      value={email}
+                      className="w-full pl-12 pr-4 py-3.5 bg-slate-100 border border-slate-200 rounded-2xl outline-none shadow-sm font-medium text-slate-600"
+                      type="email"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5 group">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 ml-1 group-focus-within:text-indigo-600 transition-colors">Verification code</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">pin</span>
+                    <input
+                      required
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      className="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-400 shadow-sm font-medium tracking-widest"
+                      placeholder="000000"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {mode === 'reset' && (
+              <>
+                <div className="space-y-1.5 group">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 ml-1">Email Address</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">alternate_email</span>
+                    <input
+                      readOnly
+                      value={email}
+                      className="w-full pl-12 pr-4 py-3.5 bg-slate-100 border border-slate-200 rounded-2xl outline-none shadow-sm font-medium text-slate-600"
+                      type="email"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5 group">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 ml-1 group-focus-within:text-indigo-600 transition-colors">Reset code</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">pin</span>
+                    <input
+                      required
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      className="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-400 shadow-sm font-medium tracking-widest"
+                      placeholder="000000"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5 group">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 ml-1 group-focus-within:text-indigo-600 transition-colors">New password</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">lock</span>
+                    <input
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-12 pr-4 py-3.5 bg-white border border-slate-200 rounded-2xl focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-400 shadow-sm font-medium"
+                      placeholder="••••••••"
+                      type="password"
+                      minLength={6}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {(mode === 'signin' || mode === 'register') && (
               <div className="space-y-1.5 group">
                 <div className="flex justify-between items-center ml-1">
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-500 group-focus-within:text-indigo-600 transition-colors">Password</label>
@@ -234,9 +427,45 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               className="w-full relative overflow-hidden bg-slate-900 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-slate-800 active:scale-[0.98] transition-all disabled:opacity-70 group shadow-xl shadow-slate-900/10 mt-6"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:animate-[shimmer_1.5s_infinite]"></div>
-              <span className="relative z-10">{loading ? 'Please wait...' : mode === 'signin' ? 'Sign In' : mode === 'forgot' ? 'Send Link' : 'Create Account'}</span>
-              {!loading && mode !== 'forgot' && <span className="material-symbols-outlined text-sm relative z-10 group-hover:translate-x-1 transition-transform">arrow_forward</span>}
+              <span className="relative z-10">
+                {loading
+                  ? 'Please wait...'
+                  : mode === 'signin'
+                    ? 'Sign In'
+                    : mode === 'forgot'
+                      ? 'Send reset code'
+                      : mode === 'reset'
+                        ? 'Update password'
+                        : mode === 'verify'
+                          ? 'Verify email'
+                          : 'Create Account'}
+              </span>
+              {!loading && (mode === 'signin' || mode === 'register') && (
+                <span className="material-symbols-outlined text-sm relative z-10 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+              )}
             </button>
+
+            {mode === 'verify' && (
+              <button
+                type="button"
+                disabled={loading || !email.trim()}
+                onClick={handleResendOtp}
+                className="w-full font-bold py-3 rounded-2xl border border-slate-200 text-slate-700 hover:bg-slate-50 active:scale-[0.98] transition-all disabled:opacity-50 text-sm"
+              >
+                Resend code
+              </button>
+            )}
+
+            {mode === 'reset' && (
+              <button
+                type="button"
+                disabled={loading || !email.trim()}
+                onClick={handleResendResetCode}
+                className="w-full font-bold py-3 rounded-2xl border border-slate-200 text-slate-700 hover:bg-slate-50 active:scale-[0.98] transition-all disabled:opacity-50 text-sm"
+              >
+                Resend reset code
+              </button>
+            )}
           </form>
 
           {(mode === 'signin' || mode === 'register') && (
@@ -267,16 +496,34 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           )}
 
           <p className="text-center text-sm font-medium text-slate-500 pt-4">
-            {mode === 'signin' ? "Don't have an account? " : mode === 'forgot' ? "Remembered your password? " : "Already have an account? "}
+            {mode === 'verify'
+              ? 'Wrong account? '
+              : mode === 'reset'
+                ? 'Wrong email? '
+                : mode === 'signin'
+                  ? "Don't have an account? "
+                  : mode === 'forgot'
+                    ? 'Remembered your password? '
+                    : 'Already have an account? '}
             <button
+              type="button"
               className="text-indigo-600 hover:text-indigo-700 font-bold hover:underline underline-offset-4 transition-colors"
               onClick={() => {
                 setError(null);
                 setSuccessMsg(null);
-                setMode(m => m === 'signin' || m === 'forgot' ? 'register' : 'signin');
+                setOtp('');
+                if (mode === 'verify' || mode === 'reset' || mode === 'forgot') {
+                  setMode('signin');
+                  return;
+                }
+                setMode((m) => (m === 'signin' ? 'register' : 'signin'));
               }}
             >
-              {mode === 'signin' ? `Sign up as ${role === UserRole.CITIZEN ? 'Citizen' : 'Official'}` : 'Sign in'}
+              {mode === 'verify' || mode === 'reset' || mode === 'forgot'
+                ? 'Back to sign in'
+                : mode === 'signin'
+                  ? `Sign up as ${role === UserRole.CITIZEN ? 'Citizen' : 'Official'}`
+                  : 'Sign in'}
             </button>
           </p>
 

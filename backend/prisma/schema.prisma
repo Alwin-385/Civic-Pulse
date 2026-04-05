@@ -47,6 +47,10 @@ model User {
   otpCodeHash     String?
   otpExpiresAt    DateTime?
 
+  // Password reset (separate from signup OTP)
+  passwordResetOtpHash     String?
+  passwordResetOtpExpiresAt DateTime?
+
   // Google OAuth
   googleId String? @unique
 }

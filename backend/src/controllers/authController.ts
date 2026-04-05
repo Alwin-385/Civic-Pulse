@@ -18,11 +18,12 @@ export const register = async (req: Request, res: Response) => {
       where: { email },
     });
 
+    const hashedPassword = await bcrypt.hash(password, 10);
     const otpCode = generateOtpCode();
     const otpCodeHash = hashOtpCode(otpCode);
     const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const emailBody = `Your verification code is: ${otpCode}\n\nThis code expires in 10 minutes.`;
 
     if (existingUser) {
       if (existingUser.emailVerifiedAt) {
@@ -32,16 +33,29 @@ export const register = async (req: Request, res: Response) => {
       await prisma.user.update({
         where: { email },
         data: {
+          name,
           password: hashedPassword,
-          emailVerifiedAt: new Date(),
+          role,
+          otpCodeHash,
+          otpExpiresAt,
         },
       });
 
-      return res.status(200).json({
-        message: "Account created and verified. You may login.",
-        verificationRequired: false,
-        email,
+      await sendEmail({
+        to: email,
+        subject: "Verify your Civic Pulse account",
+        text: emailBody,
       });
+
+      const payload: Record<string, unknown> = {
+        message: "Check your email for a verification code.",
+        verificationRequired: true,
+        email,
+      };
+      if (process.env.NODE_ENV !== "production") {
+        payload.devOtp = otpCode;
+      }
+      return res.status(200).json(payload);
     }
 
     const user = await prisma.user.create({
@@ -50,15 +64,26 @@ export const register = async (req: Request, res: Response) => {
         email,
         password: hashedPassword,
         role,
-        emailVerifiedAt: new Date(),
+        otpCodeHash,
+        otpExpiresAt,
       },
     });
 
-    return res.status(201).json({
-      message: "User registered successfully. You may login.",
-      verificationRequired: false,
-      email: user.email,
+    await sendEmail({
+      to: email,
+      subject: "Verify your Civic Pulse account",
+      text: emailBody,
     });
+
+    const payload: Record<string, unknown> = {
+      message: "Account created. Check your email for a verification code.",
+      verificationRequired: true,
+      email: user.email,
+    };
+    if (process.env.NODE_ENV !== "production") {
+      payload.devOtp = otpCode;
+    }
+    return res.status(201).json(payload);
   } catch (error) {
     return res.status(500).json({
       message: "Registration failed",
@@ -90,8 +115,11 @@ export const login = async (req: Request, res: Response) => {
     }
 
     if (!user.emailVerifiedAt) {
-      // Auto-verify legacy unverified accounts instantly to skip lockouts
-      await prisma.user.update({ where: { email }, data: { emailVerifiedAt: new Date() } });
+      return res.status(403).json({
+        message: "Email not verified. Enter the code we sent you, or request a new one.",
+        verificationRequired: true,
+        email: user.email,
+      });
     }
 
     const token = jwt.sign(
@@ -234,7 +262,11 @@ export const resendOtp = async (req: Request, res: Response) => {
       text: `Your new OTP code is: ${otpCode}\n\nThis code expires in 10 minutes.`,
     });
 
-    return res.status(200).json({ message: "OTP sent successfully.", devOtp: otpCode });
+    const payload: Record<string, unknown> = { message: "OTP sent successfully." };
+    if (process.env.NODE_ENV !== "production") {
+      payload.devOtp = otpCode;
+    }
+    return res.status(200).json(payload);
   } catch (error) {
     return res.status(500).json({ message: "Failed to resend OTP", error });
   }
@@ -249,4 +281,97 @@ export const logout = async (req: Request, res: Response) => {
     secure: !!isProd,
   });
   return res.status(200).json({ message: "Logged out" });
+};
+
+const FORGOT_PASSWORD_RESPONSE = {
+  message:
+    "If an account exists for that email, you will receive a reset code shortly.",
+};
+
+export const forgotPassword = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body as { email?: string };
+    if (!email?.trim()) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const normalized = email.trim();
+    const user = await prisma.user.findUnique({ where: { email: normalized } });
+
+    if (!user) {
+      return res.status(200).json(FORGOT_PASSWORD_RESPONSE);
+    }
+
+    const otpCode = generateOtpCode();
+    await prisma.user.update({
+      where: { email: normalized },
+      data: {
+        passwordResetOtpHash: hashOtpCode(otpCode),
+        passwordResetOtpExpiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+
+    await sendEmail({
+      to: normalized,
+      subject: "Reset your Civic Pulse password",
+      text: `Your password reset code is: ${otpCode}\n\nThis code expires in 15 minutes.\n\nIf you did not request this, you can ignore this email.`,
+    });
+
+    const payload: Record<string, unknown> = { ...FORGOT_PASSWORD_RESPONSE };
+    if (process.env.NODE_ENV !== "production") {
+      payload.devOtp = otpCode;
+    }
+    return res.status(200).json(payload);
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to process request", error });
+  }
+};
+
+export const resetPasswordWithCode = async (req: Request, res: Response) => {
+  try {
+    const { email, code, newPassword } = req.body as {
+      email?: string;
+      code?: string;
+      newPassword?: string;
+    };
+
+    if (!email?.trim() || !code || !newPassword) {
+      return res.status(400).json({
+        message: "Email, reset code, and new password are required",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
+    const normalized = email.trim();
+    const user = await prisma.user.findUnique({ where: { email: normalized } });
+
+    if (!user?.passwordResetOtpHash || !user.passwordResetOtpExpiresAt) {
+      return res.status(400).json({ message: "Invalid or expired reset code" });
+    }
+
+    if (user.passwordResetOtpExpiresAt.getTime() < Date.now()) {
+      return res.status(400).json({ message: "Reset code expired. Request a new one." });
+    }
+
+    if (hashOtpCode(String(code).replace(/\D/g, "").slice(0, 6)) !== user.passwordResetOtpHash) {
+      return res.status(401).json({ message: "Invalid reset code" });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { email: normalized },
+      data: {
+        password: hashedPassword,
+        passwordResetOtpHash: null,
+        passwordResetOtpExpiresAt: null,
+      },
+    });
+
+    return res.status(200).json({ message: "Password updated. You can sign in now." });
+  } catch (error) {
+    return res.status(500).json({ message: "Password reset failed", error });
+  }
 };
