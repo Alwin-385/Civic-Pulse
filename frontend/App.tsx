@@ -19,9 +19,29 @@ const App: React.FC = () => {
   const [token, setToken] = useState<string | null>(getStoredToken());
   const [currentScreen, setCurrentScreen] = useState<string>('DASHBOARD');
 
+  const handleLogout = async () => {
+    try {
+      await apiRequest('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Still drop client state so the UI can sign out even if the network fails.
+    }
+    logout();
+    setToken(null);
+    setRole(null);
+  };
+
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const urlToken = urlParams.get('token');
+    if (urlParams.get('oauth_error')) {
+      alert(
+        'Google sign-in failed: the backend could not talk to Postgres (common on Windows).\n\n' +
+          'Fix: In Supabase → Connect → copy the Session pooler connection string and set it as DATABASE_URL in backend/.env, then restart the API.\n\n' +
+          'Open: https://supabase.com/dashboard/project/ulrkuneewqkjisvuthoy?showConnect=true'
+      );
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
     if (urlToken) {
       setStoredAuth(urlToken);
       setToken(urlToken);
@@ -81,11 +101,7 @@ const App: React.FC = () => {
             <Settings
               onNavigate={(s) => setCurrentScreen(s)}
               onBack={() => setCurrentScreen('DASHBOARD')}
-              onLogout={() => {
-                logout();
-                setToken(null);
-                setRole(null);
-              }}
+              onLogout={handleLogout}
             />
           );
         case 'EDIT_PROFILE':
@@ -94,13 +110,7 @@ const App: React.FC = () => {
         default:
           return <CitizenDashboard 
             onNavigate={(screen) => setCurrentScreen(screen)} 
-            onLogout={() => {
-              // Best-effort: clear cookie auth too.
-              apiRequest('/api/auth/logout', { method: 'POST' }).catch(() => {});
-              logout();
-              setToken(null);
-              setRole(null);
-            }} 
+            onLogout={handleLogout} 
           />;
       }
     }
@@ -118,11 +128,7 @@ const App: React.FC = () => {
             <Settings
               onNavigate={(s) => setCurrentScreen(s)}
               onBack={() => setCurrentScreen('DASHBOARD')}
-              onLogout={() => {
-                logout();
-                setToken(null);
-                setRole(null);
-              }}
+              onLogout={handleLogout}
             />
           );
         case 'EDIT_PROFILE':
@@ -131,12 +137,7 @@ const App: React.FC = () => {
         default:
           return <OfficialDashboard 
             onNavigate={(screen) => setCurrentScreen(screen)} 
-            onLogout={() => {
-              apiRequest('/api/auth/logout', { method: 'POST' }).catch(() => {});
-              logout();
-              setToken(null);
-              setRole(null);
-            }} 
+            onLogout={handleLogout} 
           />;
       }
     }

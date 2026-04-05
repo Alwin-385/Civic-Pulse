@@ -241,6 +241,12 @@ export const resendOtp = async (req: Request, res: Response) => {
 };
 
 export const logout = async (req: Request, res: Response) => {
-  res.clearCookie("token");
+  const isProd = process.env.RENDER || process.env.NODE_ENV === "production";
+  res.clearCookie("token", {
+    httpOnly: true,
+    path: "/",
+    sameSite: isProd ? "none" : "lax",
+    secure: !!isProd,
+  });
   return res.status(200).json({ message: "Logged out" });
 };
