@@ -40,7 +40,7 @@ npm start
 
 | Variable | Value |
 |----------|-------|
-| `DATABASE_URL` | Your live Supabase/Postgres connection string |
+| `DATABASE_URL` | Supabase **session pooler** port **5432** (not 6543) — e.g. `postgresql://postgres.PROJECT_REF:PASSWORD@aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres?schema=public` |
 | `JWT_SECRET` | Long random secret |
 | `SESSION_SECRET` | Long random secret |
 | `FRONTEND_ORIGIN` | `https://civic-pulse-platform.vercel.app` |

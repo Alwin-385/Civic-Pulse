@@ -51,3 +51,10 @@ export function getCookieOptions() {
     maxAge: 7 * 24 * 60 * 60 * 1000,
   };
 }
+
+export function getOAuthCookieOptions() {
+  return {
+    ...getCookieOptions(),
+    maxAge: 10 * 60 * 1000,
+  };
+}

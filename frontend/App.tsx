@@ -15,7 +15,9 @@ import { MapView } from './screens/MapView';
 import EditProfile from './screens/EditProfile';
 
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
-  google_login_failed: 'Google sign-in failed. Please try again.',
+  google_login_failed:
+    'Google sign-in failed. Confirm Render DATABASE_URL uses Supabase port 5432 and Google redirect URI matches Render callback URL.',
+  oauth_state: 'Google sign-in session expired. Please try again.',
   database_unavailable:
     'Cannot connect to the database. Check that your Supabase project is active and DATABASE_URL on Render is correct.',
   oauth_error:

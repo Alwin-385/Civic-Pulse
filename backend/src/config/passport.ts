@@ -11,6 +11,8 @@ export const configurePassport = () => {
         clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
         callbackURL: getGoogleCallbackUrl(),
         passReqToCallback: true,
+        // Session-based OAuth state breaks on Render (cross-request cookie loss).
+        state: false,
       },
       async (
         req: any,
@@ -27,7 +29,9 @@ export const configurePassport = () => {
 
           const googleId = profile.id;
           const roleFromSession =
-            (req as any)?.oauthRole ?? (req.session as any)?.oauthRole;
+            (req as any)?.oauthRole ??
+            (req as any)?.cookies?.oauth_role ??
+            (req.session as any)?.oauthRole;
 
           const userRole = roleFromSession === "OFFICIAL" ? "OFFICIAL" : "CITIZEN";
 
@@ -59,7 +63,6 @@ export const configurePassport = () => {
               data: {
                 googleId,
                 emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
-                role: userRole ?? user.role,
                 name: profile.displayName ?? user.name,
               },
             });

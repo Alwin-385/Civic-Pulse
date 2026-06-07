@@ -14,8 +14,7 @@ import {
 } from "../controllers/authController";
 import { authenticate } from "../middleware/authMiddleware";
 import { isDatabaseConnectionError } from "../utils/dbError";
-import { getCookieOptions, resolveOAuthReturnUrl } from "../config/env";
-import { decodeOAuthState, encodeOAuthState } from "../utils/oauthState";
+import { getCookieOptions, getOAuthCookieOptions, resolveOAuthReturnUrl } from "../config/env";
 
 const router = Router();
 
@@ -34,50 +33,44 @@ router.get("/google", (req, res, next) => {
   const returnTo = typeof req.query.returnTo === "string" ? req.query.returnTo : undefined;
   const resolvedReturnTo = resolveOAuthReturnUrl(returnTo);
 
-  ((req as any).session as any).oauthRole = role;
-  ((req as any).session as any).oauthReturnTo = resolvedReturnTo;
+  res.cookie("oauth_return_to", resolvedReturnTo, getOAuthCookieOptions());
+  res.cookie("oauth_role", role, getOAuthCookieOptions());
 
-  const state = encodeOAuthState({ returnTo: resolvedReturnTo, role });
-
-  const proceed = () => {
-    passport.authenticate("google", {
-      scope: ["profile", "email"],
-      prompt: "select_account",
-      state,
-    })(req, res, next);
-  };
-
-  const session = (req as any).session;
-  if (session?.save) {
-    session.save((err: Error | null) => {
-      if (err) console.error("Session save before Google OAuth failed:", err);
-      proceed();
-    });
-    return;
-  }
-
-  proceed();
+  passport.authenticate("google", {
+    scope: ["profile", "email"],
+    prompt: "select_account",
+  })(req, res, next);
 });
 
 router.get("/google/callback", (req: Request, res: Response, next: NextFunction) => {
-  const fromState = decodeOAuthState(req.query.state);
+  const cookies = (req as any).cookies ?? {};
   const frontendUrl =
-    fromState?.returnTo ||
+    cookies.oauth_return_to ||
     ((req as any).session as any)?.oauthReturnTo ||
     resolveOAuthReturnUrl();
 
-  if (fromState?.role) {
-    (req as any).oauthRole = fromState.role;
+  if (cookies.oauth_role) {
+    (req as any).oauthRole = cookies.oauth_role;
   } else if ((req as any).session?.oauthRole) {
     (req as any).oauthRole = (req as any).session.oauthRole;
   }
 
+  const clearOAuthCookies = () => {
+    res.clearCookie("oauth_return_to", getCookieOptions());
+    res.clearCookie("oauth_role", getCookieOptions());
+  };
+
   passport.authenticate("google", { session: false }, (err: any, user: any) => {
+    clearOAuthCookies();
+
     if (err) {
-      console.error("Google OAuth callback error:", err);
+      const message = err?.message ?? String(err);
+      console.error("Google OAuth callback error:", message, err);
       const errorCode = isDatabaseConnectionError(err)
         ? "database_unavailable"
-        : "google_login_failed";
+        : message.toLowerCase().includes("state")
+          ? "oauth_state"
+          : "google_login_failed";
       return res.redirect(`${frontendUrl}/?error=${errorCode}`);
     }
 
@@ -91,16 +84,20 @@ router.get("/google/callback", (req: Request, res: Response, next: NextFunction)
       return res.redirect(`${frontendUrl}/?error=google_login_failed`);
     }
 
-    const u = user as any;
-    const token = jwt.sign(
-      { id: u.id, role: u.role },
-      process.env.JWT_SECRET as string,
-      { expiresIn: "7d" }
-    );
+    try {
+      const u = user as any;
+      const token = jwt.sign(
+        { id: u.id, role: u.role },
+        process.env.JWT_SECRET as string,
+        { expiresIn: "7d" }
+      );
 
-    res.cookie("token", token, getCookieOptions());
-
-    return res.redirect(`${frontendUrl}/?token=${token}`);
+      res.cookie("token", token, getCookieOptions());
+      return res.redirect(`${frontendUrl}/?token=${token}`);
+    } catch (signErr) {
+      console.error("Google OAuth JWT sign error:", signErr);
+      return res.redirect(`${frontendUrl}/?error=google_login_failed`);
+    }
   })(req, res, next);
 });
 
