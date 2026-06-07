@@ -18,9 +18,12 @@ import notificationRoutes from "./routes/notificationRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 import prisma from "./config/prisma";
 import { DATABASE_UNAVAILABLE_MESSAGE } from "./utils/dbError";
-import { getFrontendUrl, isProduction } from "./config/env";
+import { getFrontendUrl, getGoogleCallbackUrl, isProduction } from "./config/env";
 
 const app = express();
+
+// Required on Render/Heroku so secure cookies and sessions work behind the proxy.
+app.set("trust proxy", 1);
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -60,6 +63,17 @@ app.use(passport.session());
 
 app.get("/", (_req, res) => {
   res.send("Civic Issue Backend API is running");
+});
+
+app.get("/api/health/oauth", (_req, res) => {
+  return res.status(200).json({
+    googleClientIdSet: Boolean(process.env.GOOGLE_CLIENT_ID),
+    googleClientSecretSet: Boolean(process.env.GOOGLE_CLIENT_SECRET),
+    jwtSecretSet: Boolean(process.env.JWT_SECRET),
+    sessionSecretSet: Boolean(process.env.SESSION_SECRET),
+    callbackUrl: getGoogleCallbackUrl(),
+    frontendUrl: getFrontendUrl(),
+  });
 });
 
 app.get("/api/health", async (_req, res) => {

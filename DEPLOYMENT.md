@@ -45,10 +45,26 @@ npm start
 | `SESSION_SECRET` | Long random secret |
 | `FRONTEND_ORIGIN` | `https://civic-pulse-platform.vercel.app` |
 | `CORS_ORIGIN` | `https://civic-pulse-platform.vercel.app` |
-| `GOOGLE_CLIENT_ID` | From Google Cloud Console |
-| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console |
+| `GOOGLE_CLIENT_ID` | From Google Cloud Console (required for Google login) |
+| `GOOGLE_CLIENT_SECRET` | From Google Cloud Console (required for Google login) |
 | `GOOGLE_REDIRECT_URL` | `https://civic-pulse-ak6s.onrender.com/api/auth/google/callback` |
+| `SESSION_SECRET` | Long random secret |
+| `JWT_SECRET` | Long random secret |
 | `NODE_ENV` | `production` |
+
+**Google Cloud Console** → OAuth client → Authorized redirect URIs:
+
+```
+https://civic-pulse-ak6s.onrender.com/api/auth/google/callback
+```
+
+Check OAuth config after deploy:
+
+```
+https://civic-pulse-ak6s.onrender.com/api/health/oauth
+```
+
+All `*Set` fields must be `true`.
 
 After first deploy, run migrations from Render shell or locally against production DB:
 

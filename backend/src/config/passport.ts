@@ -26,7 +26,8 @@ export const configurePassport = () => {
           }
 
           const googleId = profile.id;
-          const roleFromSession = (req.session as any)?.oauthRole;
+          const roleFromSession =
+            (req as any)?.oauthRole ?? (req.session as any)?.oauthRole;
 
           const userRole = roleFromSession === "OFFICIAL" ? "OFFICIAL" : "CITIZEN";
 
