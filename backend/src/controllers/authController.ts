@@ -5,6 +5,8 @@ import prisma from "../config/prisma";
 import { AuthRequest } from "../middleware/authMiddleware";
 import { generateOtpCode, hashOtpCode } from "../utils/otp";
 import { sendEmail } from "../utils/email";
+import { DATABASE_UNAVAILABLE_MESSAGE, isDatabaseConnectionError } from "../utils/dbError";
+import { getCookieOptions } from "../config/env";
 
 export const register = async (req: Request, res: Response) => {
   try {
@@ -85,9 +87,11 @@ export const register = async (req: Request, res: Response) => {
     }
     return res.status(201).json(payload);
   } catch (error) {
+    if (isDatabaseConnectionError(error)) {
+      return res.status(503).json({ message: DATABASE_UNAVAILABLE_MESSAGE });
+    }
     return res.status(500).json({
       message: "Registration failed",
-      error,
     });
   }
 };
@@ -131,12 +135,7 @@ export const login = async (req: Request, res: Response) => {
       { expiresIn: "7d" }
     );
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("token", token, getCookieOptions());
 
     return res.status(200).json({
       message: "Login successful",
@@ -149,9 +148,11 @@ export const login = async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
+    if (isDatabaseConnectionError(error)) {
+      return res.status(503).json({ message: DATABASE_UNAVAILABLE_MESSAGE });
+    }
     return res.status(500).json({
       message: "Login failed",
-      error,
     });
   }
 };

@@ -1,6 +1,7 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import prisma from "./prisma";
+import { getGoogleCallbackUrl } from "./env";
 
 export const configurePassport = () => {
   passport.use(
@@ -8,7 +9,7 @@ export const configurePassport = () => {
       {
         clientID: process.env.GOOGLE_CLIENT_ID as string,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-        callbackURL: (process.env.RENDER || process.env.NODE_ENV === 'production') ? 'https://civic-pulse-ak6s.onrender.com/api/auth/google/callback' : (process.env.GOOGLE_REDIRECT_URL as string),
+        callbackURL: getGoogleCallbackUrl(),
         passReqToCallback: true,
       },
       async (

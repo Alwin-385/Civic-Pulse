@@ -59,6 +59,14 @@ export function getStoredRole(): UserRole | null {
   return null;
 }
 
+export function isStoredTokenValid(): boolean {
+  const token = getStoredToken();
+  if (!token) return false;
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) return false;
+  return payload.exp * 1000 > Date.now();
+}
+
 export function getStoredUserId(): number | null {
   const raw = localStorage.getItem("userId");
   if (!raw) return null;

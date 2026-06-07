@@ -6,7 +6,8 @@ type ApiError = {
 const isLocalDesktop = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
 
 const API_BASE_URL =
-  (import.meta as any).env.VITE_API_BASE_URL || (isLocalDesktop ? 'http://localhost:5000' : 'https://YOUR_NEW_RENDER_URL.onrender.com');
+  (import.meta as any).env.VITE_API_BASE_URL ||
+  (isLocalDesktop ? 'http://localhost:5000' : 'https://civic-pulse-ak6s.onrender.com');
 
 export function getApiBaseUrl() {
   return API_BASE_URL;
@@ -61,7 +62,14 @@ export async function apiRequest<T>(
     credentials: "include",
   });
   const text = await res.text();
-  const payload = text ? JSON.parse(text) : null;
+  let payload: unknown = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = { message: text };
+    }
+  }
 
   if (!res.ok) {
     throw toJsonError(payload);

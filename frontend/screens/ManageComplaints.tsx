@@ -319,8 +319,8 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
                  className="flex items-center justify-center size-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 text-white transition-all transform hover:-translate-x-1"
               >
                 <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-              </button>
-              <div>
+            </button>
+            <div>
                 <h1 className="text-xl md:text-2xl font-black text-white tracking-tight leading-tight">Manage Complaints</h1>
                 <p className="text-indigo-200 text-[10px] md:text-xs font-bold uppercase tracking-widest mt-0.5">
                   {loading ? 'Loading...' : `${complaints.filter((c) => c.status !== 'RESOLVED').length} ACTIVE COMPLAINTS`}
@@ -371,8 +371,8 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
                 }`}
               >
                 PWD Division
-              </button>
-            </div>
+          </button>
+        </div>
           )}
 
           {/* Advanced Filters */}
@@ -400,7 +400,7 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
                 <option value="week" className="text-slate-900 font-bold">Past Week</option>
                 <option value="month" className="text-slate-900 font-bold">Past Month</option>
              </select>
-          </div>
+        </div>
         </div>
       </header>
 
@@ -419,7 +419,7 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
                 <span className="material-symbols-outlined text-5xl text-slate-300 mb-2">fact_check</span>
                 <p className="text-slate-500 font-bold">No Records Found</p>
                 <p className="text-slate-400 text-xs font-medium mt-1">Adjust filters or search parameters.</p>
-             </div>
+        </div>
           )}
 
           {filteredComplaints.map((complaint) => {
@@ -455,14 +455,14 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
                         Urgent
                       </span>
                     )}
-                  </div>
+            </div>
                   <div className="flex items-center gap-1 shrink-0 ml-2">
                     {isReported ? (
                       <>
                         <span className="relative flex h-2.5 w-2.5">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
                           <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-                        </span>
+                </span>
                         <span className="text-[10px] hidden sm:inline font-bold text-amber-600 tracking-wide uppercase">Open</span>
                       </>
                     ) : complaint.status === 'RESOLVED' ? (
@@ -470,12 +470,12 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
                         <span className="material-symbols-outlined text-[14px] text-emerald-500">check_circle</span>
                         <span className="text-[10px] hidden sm:inline font-bold text-emerald-600 tracking-wide uppercase">Resolved</span>
                       </>
-                    ) : (
-                      <>
+                  ) : (
+                    <>
                         <span className="material-symbols-outlined text-[14px] text-indigo-500">engineering</span>
                         <span className="text-[10px] hidden sm:inline font-bold text-indigo-600 tracking-wide uppercase">Active</span>
-                      </>
-                    )}
+                    </>
+                  )}
                   </div>
                 </div>
 
@@ -687,7 +687,7 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
                   >
                     <span className="material-symbols-outlined group-hover:-translate-y-1 transition-transform">picture_as_pdf</span>
                     {isExporting ? 'Generating PDF...' : 'Export to PDF'}
-                  </button>
+                </button>
                 </div>
 
               </div>

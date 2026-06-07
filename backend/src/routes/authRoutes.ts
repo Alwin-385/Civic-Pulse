@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import passport from "passport";
 import {
@@ -13,6 +13,8 @@ import {
   resetPasswordWithCode,
 } from "../controllers/authController";
 import { authenticate } from "../middleware/authMiddleware";
+import { isDatabaseConnectionError } from "../utils/dbError";
+import { getCookieOptions, resolveOAuthReturnUrl } from "../config/env";
 
 const router = Router();
 
@@ -28,26 +30,32 @@ router.post("/logout", logout);
 
 router.get("/google", (req, res, next) => {
   const role = req.query.role === "OFFICIAL" ? "OFFICIAL" : "CITIZEN";
+  const returnTo = typeof req.query.returnTo === "string" ? req.query.returnTo : undefined;
+
   ((req as any).session as any).oauthRole = role;
+  ((req as any).session as any).oauthReturnTo = resolveOAuthReturnUrl(returnTo);
+
   passport.authenticate("google", {
     scope: ["profile", "email"],
     prompt: "select_account",
   })(req, res, next);
 });
 
-const isProd = process.env.RENDER || process.env.NODE_ENV === "production";
-const FRONTEND_URL =
-  process.env.FRONTEND_ORIGIN ||
-  (isProd ? "https://civic-pulse-platform.vercel.app" : "http://localhost:3000");
+router.get("/google/callback", (req: Request, res: Response, next: NextFunction) => {
+  const frontendUrl =
+    ((req as any).session as any)?.oauthReturnTo || resolveOAuthReturnUrl();
 
-router.get("/google/callback", (req, res, next) => {
-  passport.authenticate("google", { session: false }, (err: unknown, user: any) => {
+  passport.authenticate("google", { session: false }, (err: any, user: any) => {
     if (err) {
       console.error("Google OAuth callback error:", err);
-      return res.redirect(`${FRONTEND_URL}/?oauth_error=1`);
+      const errorCode = isDatabaseConnectionError(err)
+        ? "database_unavailable"
+        : "google_login_failed";
+      return res.redirect(`${frontendUrl}/?error=${errorCode}`);
     }
+
     if (!user) {
-      return res.redirect(`${FRONTEND_URL}/`);
+      return res.redirect(`${frontendUrl}/?error=google_login_failed`);
     }
 
     const u = user as any;
@@ -57,14 +65,9 @@ router.get("/google/callback", (req, res, next) => {
       { expiresIn: "7d" }
     );
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      sameSite: isProd ? "none" : "lax",
-      secure: !!isProd,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("token", token, getCookieOptions());
 
-    res.redirect(`${FRONTEND_URL}/?token=${token}`);
+    return res.redirect(`${frontendUrl}/?token=${token}`);
   })(req, res, next);
 });
 

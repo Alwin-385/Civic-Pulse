@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { UserRole } from '../types';
 import { apiRequest, getApiBaseUrl } from '../apiClient';
 
 interface LoginProps {
   onLogin: (auth: { token: string; role: UserRole }) => void;
+  initialError?: string | null;
 }
 
 type Mode = 'signin' | 'register' | 'forgot' | 'verify' | 'reset';
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, initialError = null }) => {
   const [mode, setMode] = useState<Mode>('signin');
   const [role, setRole] = useState<UserRole>(UserRole.CITIZEN);
 
@@ -17,8 +18,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialError) setError(initialError);
+  }, [initialError]);
 
   const handleResendOtp = async () => {
     if (!email.trim()) return;
@@ -482,7 +487,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           {(mode === 'signin' || mode === 'register') && (
             <button
               type="button"
-              onClick={() => window.location.href = `${getApiBaseUrl()}/api/auth/google?role=${role}`}
+              onClick={() => {
+                const returnTo = encodeURIComponent(window.location.origin);
+                window.location.href = `${getApiBaseUrl()}/api/auth/google?role=${role}&returnTo=${returnTo}`;
+              }}
               className="w-full bg-white border border-slate-200 text-slate-700 font-bold py-3.5 rounded-2xl shadow-sm flex items-center justify-center gap-3 hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98] transition-all"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">

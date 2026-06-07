@@ -16,6 +16,9 @@ import uploadRoutes from "./routes/uploadRoutes";
 import departmentRoutes from "./routes/departmentRoutes";
 import notificationRoutes from "./routes/notificationRoutes";
 import { errorHandler } from "./middleware/errorHandler";
+import prisma from "./config/prisma";
+import { DATABASE_UNAVAILABLE_MESSAGE } from "./utils/dbError";
+import { getFrontendUrl, isProduction } from "./config/env";
 
 const app = express();
 
@@ -29,7 +32,12 @@ app.use(morgan("dev"));
 app.use(limiter);
 app.use(
   cors({
-    origin: [process.env.CORS_ORIGIN || "http://localhost:3000", "https://civic-pulse-platform.vercel.app", /\.vercel\.app$/],
+    origin: [
+      process.env.CORS_ORIGIN || "http://localhost:3000",
+      getFrontendUrl(),
+      "https://civic-pulse-platform.vercel.app",
+      /\.vercel\.app$/,
+    ],
     credentials: true,
   })
 );
@@ -42,8 +50,8 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: "lax",
-      secure: false,
+      sameSite: isProduction ? "none" : "lax",
+      secure: isProduction,
     },
   })
 );
@@ -52,6 +60,20 @@ app.use(passport.session());
 
 app.get("/", (_req, res) => {
   res.send("Civic Issue Backend API is running");
+});
+
+app.get("/api/health", async (_req, res) => {
+  try {
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1`,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Database connection timed out")), 5000)
+      ),
+    ]);
+    return res.status(200).json({ ok: true, database: "connected" });
+  } catch {
+    return res.status(503).json({ ok: false, database: "unavailable", message: DATABASE_UNAVAILABLE_MESSAGE });
+  }
 });
 
 app.use("/api/auth", authRoutes);

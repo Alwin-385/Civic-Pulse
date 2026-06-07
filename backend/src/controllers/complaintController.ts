@@ -43,16 +43,19 @@ export const createComplaint = async (req: AuthRequest, res: Response) => {
       },
     });
 
-    // Cursor's TS diagnostics sometimes lag Prisma client generation; runtime type is correct.
-    await (prisma as any).notification.create({
-      data: {
-        userId: req.user.id,
-        message: `Complaint #${complaint.id} submitted. Status: REPORTED.`,
-        complaintId: complaint.id,
-      },
-    });
+    try {
+      await (prisma as any).notification.create({
+        data: {
+          userId: req.user.id,
+          message: `Complaint #${complaint.id} submitted. Status: REPORTED.`,
+          complaintId: complaint.id,
+        },
+      });
+    } catch (notificationError) {
+      console.error("Notification creation failed:", notificationError);
+    }
 
-    await sendEmail({
+    void sendEmail({
       to: complaint.user.email,
       subject: `Complaint submitted (#${complaint.id})`,
       text: `Your complaint has been submitted.\n\nTracking ID: ${complaint.id}\nStatus: REPORTED\nDepartment: ${complaint.department?.name ?? "-"}\n\nWe will notify you when a technician is assigned and the status changes.`,
