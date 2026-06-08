@@ -16,10 +16,16 @@ import EditProfile from './screens/EditProfile';
 
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
   google_login_failed:
-    'Google sign-in failed. Confirm Render DATABASE_URL uses Supabase port 5432 and Google redirect URI matches Render callback URL.',
+    'Google sign-in failed. Update GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on Render to match your new Google Cloud OAuth client, then redeploy.',
+  oauth_redirect_mismatch:
+    'Google redirect URI mismatch. In Google Cloud Console add: https://civic-pulse-ak6s.onrender.com/api/auth/google/callback',
+  oauth_invalid_client:
+    'Invalid Google OAuth client on Render. Paste the new Client ID and Client Secret from Google Cloud into Render Environment variables.',
+  oauth_access_denied:
+    'Google access was denied. Add your Gmail under Google Cloud → Audience → Test users (app is in Testing mode).',
   oauth_state: 'Google sign-in session expired. Please try again.',
   database_unavailable:
-    'Cannot connect to the database. Check that your Supabase project is active and DATABASE_URL on Render is correct.',
+    'Cannot connect to the database. On Render set DATABASE_URL to Supabase session pooler port 5432.',
   oauth_error:
     'Google sign-in failed on the deployed site. Use https://civic-pulse-platform.vercel.app and ensure Render has a valid DATABASE_URL.',
 };

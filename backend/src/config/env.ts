@@ -48,13 +48,7 @@ export function getCookieOptions() {
     httpOnly: true,
     sameSite: isProduction ? ("none" as const) : ("lax" as const),
     secure: isProduction,
+    path: "/",
     maxAge: 7 * 24 * 60 * 60 * 1000,
-  };
-}
-
-export function getOAuthCookieOptions() {
-  return {
-    ...getCookieOptions(),
-    maxAge: 10 * 60 * 1000,
   };
 }

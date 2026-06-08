@@ -13,8 +13,8 @@ import {
   resetPasswordWithCode,
 } from "../controllers/authController";
 import { authenticate } from "../middleware/authMiddleware";
-import { isDatabaseConnectionError } from "../utils/dbError";
-import { getCookieOptions, getOAuthCookieOptions, resolveOAuthReturnUrl } from "../config/env";
+import { getCookieOptions, resolveOAuthReturnUrl } from "../config/env";
+import { decodeOAuthState, encodeOAuthState, mapOAuthErrorCode } from "../utils/oauthState";
 
 const router = Router();
 
@@ -32,45 +32,28 @@ router.get("/google", (req, res, next) => {
   const role = req.query.role === "OFFICIAL" ? "OFFICIAL" : "CITIZEN";
   const returnTo = typeof req.query.returnTo === "string" ? req.query.returnTo : undefined;
   const resolvedReturnTo = resolveOAuthReturnUrl(returnTo);
-
-  res.cookie("oauth_return_to", resolvedReturnTo, getOAuthCookieOptions());
-  res.cookie("oauth_role", role, getOAuthCookieOptions());
+  const state = encodeOAuthState({ returnTo: resolvedReturnTo, role });
 
   passport.authenticate("google", {
     scope: ["profile", "email"],
     prompt: "select_account",
+    state,
   })(req, res, next);
 });
 
 router.get("/google/callback", (req: Request, res: Response, next: NextFunction) => {
-  const cookies = (req as any).cookies ?? {};
-  const frontendUrl =
-    cookies.oauth_return_to ||
-    ((req as any).session as any)?.oauthReturnTo ||
-    resolveOAuthReturnUrl();
+  const fromState = decodeOAuthState(req.query.state);
+  const frontendUrl = fromState?.returnTo || resolveOAuthReturnUrl();
 
-  if (cookies.oauth_role) {
-    (req as any).oauthRole = cookies.oauth_role;
-  } else if ((req as any).session?.oauthRole) {
-    (req as any).oauthRole = (req as any).session.oauthRole;
+  if (fromState?.role) {
+    (req as any).oauthRole = fromState.role;
   }
 
-  const clearOAuthCookies = () => {
-    res.clearCookie("oauth_return_to", getCookieOptions());
-    res.clearCookie("oauth_role", getCookieOptions());
-  };
-
   passport.authenticate("google", { session: false }, (err: any, user: any) => {
-    clearOAuthCookies();
-
     if (err) {
       const message = err?.message ?? String(err);
-      console.error("Google OAuth callback error:", message, err);
-      const errorCode = isDatabaseConnectionError(err)
-        ? "database_unavailable"
-        : message.toLowerCase().includes("state")
-          ? "oauth_state"
-          : "google_login_failed";
+      console.error("Google OAuth callback error:", message);
+      const errorCode = mapOAuthErrorCode(err);
       return res.redirect(`${frontendUrl}/?error=${errorCode}`);
     }
 

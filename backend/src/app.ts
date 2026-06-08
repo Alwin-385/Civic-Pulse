@@ -66,13 +66,16 @@ app.get("/", (_req, res) => {
 });
 
 app.get("/api/health/oauth", (_req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID ?? "";
   return res.status(200).json({
-    googleClientIdSet: Boolean(process.env.GOOGLE_CLIENT_ID),
+    googleClientIdSet: Boolean(clientId),
+    googleClientIdPrefix: clientId ? clientId.slice(0, 12) + "..." : null,
     googleClientSecretSet: Boolean(process.env.GOOGLE_CLIENT_SECRET),
     jwtSecretSet: Boolean(process.env.JWT_SECRET),
     sessionSecretSet: Boolean(process.env.SESSION_SECRET),
     callbackUrl: getGoogleCallbackUrl(),
     frontendUrl: getFrontendUrl(),
+    hint: "googleClientIdPrefix must start with 423199778935 after you update Render with the new Google client",
   });
 });
 

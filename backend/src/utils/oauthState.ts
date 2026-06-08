@@ -22,3 +22,19 @@ export function decodeOAuthState(state: unknown): OAuthStatePayload | null {
     return null;
   }
 }
+
+export function mapOAuthErrorCode(err: unknown): string {
+  const message = (err as any)?.message?.toLowerCase?.() ?? String(err).toLowerCase();
+  if (message.includes("redirect_uri")) return "oauth_redirect_mismatch";
+  if (message.includes("access_denied") || message.includes("denied")) return "oauth_access_denied";
+  if (message.includes("invalid_client") || message.includes("unauthorized_client")) return "oauth_invalid_client";
+  if (message.includes("state")) return "oauth_state";
+  if (
+    message.includes("can't reach database") ||
+    message.includes("connection") ||
+    message.includes("prisma")
+  ) {
+    return "database_unavailable";
+  }
+  return "google_login_failed";
+}
