@@ -59,12 +59,22 @@ export function getStoredRole(): UserRole | null {
   return null;
 }
 
-export function isStoredTokenValid(): boolean {
-  const token = getStoredToken();
+export function isTokenValid(token: string | null | undefined): boolean {
   if (!token) return false;
   const payload = decodeJwtPayload(token);
   if (!payload?.exp) return false;
   return payload.exp * 1000 > Date.now();
+}
+
+export function isStoredTokenValid(): boolean {
+  return isTokenValid(getStoredToken());
+}
+
+export function roleFromToken(token: string): UserRole | null {
+  const payload = decodeJwtPayload(token);
+  if (payload?.role === UserRole.CITIZEN) return UserRole.CITIZEN;
+  if (payload?.role === UserRole.OFFICIAL) return UserRole.OFFICIAL;
+  return null;
 }
 
 export function getStoredUserId(): number | null {

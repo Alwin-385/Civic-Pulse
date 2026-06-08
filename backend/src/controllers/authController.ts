@@ -163,8 +163,19 @@ export const me = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const users = await prisma.$queryRaw<any[]>`SELECT * FROM "User" WHERE id = ${req.user.id}`;
-    const user = users[0];
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        phone: true,
+        address: true,
+        bio: true,
+        createdAt: true,
+      },
+    });
 
     if (!user) return res.status(404).json({ message: "User not found" });
 

@@ -8,8 +8,16 @@ import TrackComplaint from './screens/TrackComplaint';
 import ManageStaff from './screens/ManageStaff';
 import ManageComplaints from './screens/ManageComplaints';
 import { UserRole } from './types';
-import { apiRequest } from './apiClient';
-import { getStoredToken, isStoredTokenValid, logout, setStoredAuth, setStoredRole } from './authStore';
+import { apiRequest, wakeApi } from './apiClient';
+import {
+  getStoredToken,
+  isStoredTokenValid,
+  isTokenValid,
+  logout,
+  roleFromToken,
+  setStoredAuth,
+  setStoredRole,
+} from './authStore';
 import { Settings } from './screens/Settings';
 import { MapView } from './screens/MapView';
 import EditProfile from './screens/EditProfile';
@@ -27,10 +35,12 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   database_unavailable:
     'Cannot connect to the database. On Render set DATABASE_URL to the Supabase session pooler (port 5432) with no quotes around the value.',
   database_schema:
-    'Database schema was out of date. A fix has been applied — redeploy Render, then try Google sign-in again.',
+    'Database schema was out of date. Redeploy Render, then try Google sign-in again.',
   oauth_error:
     'Google sign-in failed on the deployed site. Use https://civic-pulse-platform.vercel.app and ensure Render has a valid DATABASE_URL.',
 };
+
+const AUTH_BOOTSTRAP_MAX_MS = 12000;
 
 const App: React.FC = () => {
   const [role, setRole] = useState<UserRole | null>(null);
@@ -38,9 +48,46 @@ const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<string>('DASHBOARD');
   const [authChecking, setAuthChecking] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authStatus, setAuthStatus] = useState('Checking session...');
+
+  useEffect(() => {
+    wakeApi();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
+    const safetyTimer = window.setTimeout(() => {
+      if (!cancelled) {
+        setAuthChecking(false);
+        setAuthStatus('Checking session...');
+      }
+    }, AUTH_BOOTSTRAP_MAX_MS);
+
+    const applyToken = (authToken: string) => {
+      const decodedRole = roleFromToken(authToken);
+      if (!decodedRole) return false;
+      setStoredAuth(authToken);
+      setToken(authToken);
+      setRole(decodedRole);
+      setStoredRole(decodedRole);
+      return true;
+    };
+
+    const validateInBackground = (authToken: string) => {
+      apiRequest<{ user: { role: UserRole } }>('/api/auth/me', { token: authToken, timeoutMs: 20000 })
+        .then((data) => {
+          if (cancelled) return;
+          setRole(data.user.role);
+          setStoredRole(data.user.role);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          logout();
+          setToken(null);
+          setRole(null);
+          setAuthError('Session expired. Please sign in again.');
+        });
+    };
 
     const bootstrapAuth = async () => {
       const urlParams = new URLSearchParams(window.location.search);
@@ -58,31 +105,25 @@ const App: React.FC = () => {
         setAuthError(AUTH_ERROR_MESSAGES[urlError] ?? 'Sign-in failed. Please try again.');
       }
 
-      if (urlToken) {
-        setStoredAuth(urlToken);
-        setToken(urlToken);
+      // Google OAuth redirect: log in immediately from JWT — do not block on slow API wake-up.
+      if (urlToken && isTokenValid(urlToken) && applyToken(urlToken)) {
+        validateInBackground(urlToken);
+        return;
       }
 
-      const storedToken = urlToken || getStoredToken();
+      const storedToken = getStoredToken();
+      if (storedToken && isStoredTokenValid() && applyToken(storedToken)) {
+        validateInBackground(storedToken);
+        return;
+      }
 
+      if (storedToken && !isStoredTokenValid()) {
+        logout();
+      }
+
+      setAuthStatus('Connecting to server...');
       try {
-        if (storedToken && isStoredTokenValid()) {
-          const data = await apiRequest<{ user: { role: UserRole } }>('/api/auth/me', {
-            token: storedToken,
-          });
-          if (!cancelled) {
-            setToken(storedToken);
-            setRole(data.user.role);
-            setStoredRole(data.user.role);
-          }
-          return;
-        }
-
-        if (storedToken && !isStoredTokenValid()) {
-          logout();
-        }
-
-        const data = await apiRequest<{ user: { role: UserRole } }>('/api/auth/me');
+        const data = await apiRequest<{ user: { role: UserRole } }>('/api/auth/me', { timeoutMs: 20000 });
         if (!cancelled) {
           setRole(data.user.role);
           setStoredRole(data.user.role);
@@ -93,22 +134,26 @@ const App: React.FC = () => {
           setToken(null);
           setRole(null);
         }
-      } finally {
-        if (!cancelled) {
-          setAuthChecking(false);
-        }
       }
     };
 
-    bootstrapAuth();
+    bootstrapAuth()
+      .finally(() => {
+        if (!cancelled) {
+          setAuthChecking(false);
+          setAuthStatus('Checking session...');
+        }
+      });
+
     return () => {
       cancelled = true;
+      window.clearTimeout(safetyTimer);
     };
   }, []);
 
   const handleLogout = async () => {
     try {
-      await apiRequest('/api/auth/logout', { method: 'POST' });
+      await apiRequest('/api/auth/logout', { method: 'POST', timeoutMs: 10000 });
     } catch {
       // Still drop client state so the UI can sign out even if the network fails.
     }
@@ -122,9 +167,10 @@ const App: React.FC = () => {
     if (authChecking) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50">
-          <div className="flex flex-col items-center gap-3 text-slate-500">
+          <div className="flex flex-col items-center gap-3 text-slate-500 max-w-xs text-center px-4">
             <span className="material-symbols-outlined animate-spin text-3xl text-indigo-600">progress_activity</span>
-            <p className="text-sm font-medium">Checking session...</p>
+            <p className="text-sm font-medium">{authStatus}</p>
+            <p className="text-xs text-slate-400">First load may take up to 30 seconds while the server wakes up.</p>
           </div>
         </div>
       );
