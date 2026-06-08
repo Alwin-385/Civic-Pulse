@@ -11,7 +11,8 @@ const API_BASE_URL =
   (import.meta as any).env.VITE_API_BASE_URL ||
   (isLocalDesktop ? "http://localhost:5000" : "https://civic-pulse-ak6s.onrender.com");
 
-const DEFAULT_TIMEOUT_MS = 25000;
+const GET_TIMEOUT_MS = 30000;
+const MUTATION_TIMEOUT_MS = 60000;
 
 export function getApiBaseUrl() {
   return API_BASE_URL;
@@ -28,10 +29,15 @@ function toJsonError(payload: any): ApiError {
   return { message: "Request failed", error: payload } as ApiError;
 }
 
+function isTimeoutError(err: unknown): boolean {
+  const msg = (err as any)?.message ?? "";
+  return String(msg).includes("too long to respond") || (err as any)?.name === "AbortError";
+}
+
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
-  timeoutMs = DEFAULT_TIMEOUT_MS
+  timeoutMs: number
 ): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -39,12 +45,37 @@ async function fetchWithTimeout(
     return await fetch(url, { ...init, signal: controller.signal });
   } catch (err: any) {
     if (err?.name === "AbortError") {
-      throw { message: "Server took too long to respond. The API may be waking up — try again in a moment." };
+      const timeoutErr = {
+        name: "AbortError",
+        message: "Server took too long to respond. The API may be waking up — try again in a moment.",
+      };
+      throw timeoutErr;
     }
     throw { message: err?.message || "Network error. Check your connection." };
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function fetchOnce<T>(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<T> {
+  const res = await fetchWithTimeout(url, init, timeoutMs);
+  const text = await res.text();
+  let payload: unknown = null;
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = { message: text };
+    }
+  }
+  if (!res.ok) {
+    throw toJsonError(payload);
+  }
+  return payload as T;
 }
 
 export async function apiRequest<T>(
@@ -56,12 +87,15 @@ export async function apiRequest<T>(
     headers?: Record<string, string>;
     isFormData?: boolean;
     timeoutMs?: number;
+    retries?: number;
   } = {}
 ): Promise<T> {
   const url = `${API_BASE_URL}${path.startsWith("/") ? "" : "/"}${path}`;
   const method = opts.method ?? "GET";
   const token = opts.token ?? getAuthToken();
-  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const isMutation = method !== "GET" && method !== "HEAD";
+  const timeoutMs = opts.timeoutMs ?? (isMutation ? MUTATION_TIMEOUT_MS : GET_TIMEOUT_MS);
+  const maxAttempts = (opts.retries ?? (isMutation ? 2 : 1)) + 1;
 
   const headers: Record<string, string> = {
     ...(opts.headers ?? {}),
@@ -79,32 +113,27 @@ export async function apiRequest<T>(
 
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetchWithTimeout(
-    url,
-    {
-      method,
-      headers,
-      body,
-      credentials: "include",
-    },
-    timeoutMs
-  );
+  const init: RequestInit = {
+    method,
+    headers,
+    body,
+    credentials: "include",
+  };
 
-  const text = await res.text();
-  let payload: unknown = null;
-  if (text) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      payload = JSON.parse(text);
-    } catch {
-      payload = { message: text };
+      return await fetchOnce<T>(url, init, timeoutMs);
+    } catch (err) {
+      lastError = err;
+      if (attempt < maxAttempts && isTimeoutError(err)) {
+        await new Promise((r) => setTimeout(r, 1500));
+        continue;
+      }
+      throw err;
     }
   }
-
-  if (!res.ok) {
-    throw toJsonError(payload);
-  }
-
-  return payload as T;
+  throw lastError;
 }
 
 /** Ping API to wake Render free-tier instance (non-blocking). */

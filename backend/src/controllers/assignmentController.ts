@@ -66,16 +66,20 @@ export const assignComplaintToStaff = async (req: Request, res: Response) => {
       }
     });
 
-    await prisma.notification.create({
-      data: {
-        userId: complaint.userId,
-        message: `Complaint #${complaint.id} has been dispatched to ${complaint.assignedStaff?.name ?? "a staff member"}.`,
-        complaintId: complaint.id,
-      },
-    });
+    try {
+      await prisma.notification.create({
+        data: {
+          userId: complaint.userId,
+          message: `Complaint #${complaint.id} has been dispatched to ${complaint.assignedStaff?.name ?? "a staff member"}.`,
+          complaintId: complaint.id,
+        },
+      });
+    } catch (notificationError) {
+      console.error("Notification create failed:", notificationError);
+    }
 
     if (complaint.user?.email) {
-      await sendEmail({
+      void sendEmail({
         to: complaint.user.email,
         subject: `Technician assigned for Complaint #${complaint.id}`,
         text: `A technician has been assigned to your complaint.\n\nTracking ID: ${complaint.id}\nDepartment: ${complaint.department?.name ?? "-"}\nAssigned Staff: ${complaint.assignedStaff?.name ?? "-"}\nStatus: DISPATCHED\n\nWe will notify you again when the status changes.`,

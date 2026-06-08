@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { apiRequest } from '../apiClient';
+import { apiRequest, wakeApi } from '../apiClient';
 import { NotificationsWidget } from '../components/NotificationsWidget';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -100,6 +100,7 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
   };
 
   useEffect(() => {
+    wakeApi();
     void refresh();
   }, [statusFilter, timeframeFilter]);
 
@@ -131,6 +132,7 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
   }, [complaints, query, departmentFilter]);
 
   const openReview = (c: ApiComplaint) => {
+    wakeApi();
     setReviewComplaint(c);
     setReviewOpen(true);
     setAssignStaffId(c.assignedStaff?.id ?? null);
@@ -145,6 +147,7 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
       await apiRequest('/api/assignments', {
         method: 'POST',
         body: { complaintId: reviewComplaint.id, staffId: assignStaffId },
+        retries: 2,
       });
       alert('Staff personnel has been dispatched successfully!');
       await refresh();
@@ -163,6 +166,7 @@ const ManageComplaints: React.FC<ManageComplaintsProps> = ({ onBack }) => {
       await apiRequest(`/api/complaints/${reviewComplaint.id}/status`, {
         method: 'PATCH',
         body: { status: updateStatus, note: note.trim() || undefined },
+        retries: 2,
       });
       alert('Complaint status has been updated successfully!');
       await refresh();

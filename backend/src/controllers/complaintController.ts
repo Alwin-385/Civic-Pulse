@@ -283,14 +283,17 @@ export const updateComplaintStatus = async (
 
 
 
-    // Cursor's TS diagnostics sometimes lag Prisma client generation; runtime type is correct.
-    await (prisma as any).notification.create({
-      data: {
-        userId: existingComplaint.userId,
-        message: `Complaint #${complaintId} status updated to ${status}.`,
-        complaintId: complaintId,
-      },
-    });
+    try {
+      await (prisma as any).notification.create({
+        data: {
+          userId: existingComplaint.userId,
+          message: `Complaint #${complaintId} status updated to ${status}.`,
+          complaintId: complaintId,
+        },
+      });
+    } catch (notificationError) {
+      console.error("Notification create failed:", notificationError);
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: existingComplaint.userId },
@@ -307,7 +310,7 @@ export const updateComplaintStatus = async (
               ? "Acknowledged"
               : String(status);
 
-      await sendEmail({
+      void sendEmail({
         to: user.email,
         subject: `Complaint #${complaintId} status: ${statusLabel}`,
         text: `Update for your complaint.\n\nTracking ID: ${complaintId}\nStatus: ${statusLabel}\n\n${
