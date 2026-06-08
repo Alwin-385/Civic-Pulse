@@ -25,7 +25,9 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
     'Google access was denied. Add your Gmail under Google Cloud → Audience → Test users (app is in Testing mode).',
   oauth_state: 'Google sign-in session expired. Please try again.',
   database_unavailable:
-    'Cannot connect to the database. On Render set DATABASE_URL to Supabase session pooler port 5432.',
+    'Cannot connect to the database. On Render set DATABASE_URL to the Supabase session pooler (port 5432) with no quotes around the value.',
+  database_schema:
+    'Database schema was out of date. A fix has been applied — redeploy Render, then try Google sign-in again.',
   oauth_error:
     'Google sign-in failed on the deployed site. Use https://civic-pulse-platform.vercel.app and ensure Render has a valid DATABASE_URL.',
 };

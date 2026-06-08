@@ -25,8 +25,10 @@ Redeploy after saving.
 **Build command** (Settings → Build & Deploy):
 
 ```
-npm install --include=dev && npm run build
+npm install --include=dev && npx prisma db push && npm run build
 ```
+
+This syncs the Supabase schema on every deploy (required after code adds new DB columns).
 
 **Start command:**
 

@@ -1,4 +1,5 @@
 import { resolveOAuthReturnUrl } from "../config/env";
+import { isDatabaseConnectionError, isDatabaseSchemaError } from "./dbError";
 
 export type OAuthStatePayload = {
   returnTo: string;
@@ -29,12 +30,7 @@ export function mapOAuthErrorCode(err: unknown): string {
   if (message.includes("access_denied") || message.includes("denied")) return "oauth_access_denied";
   if (message.includes("invalid_client") || message.includes("unauthorized_client")) return "oauth_invalid_client";
   if (message.includes("state")) return "oauth_state";
-  if (
-    message.includes("can't reach database") ||
-    message.includes("connection") ||
-    message.includes("prisma")
-  ) {
-    return "database_unavailable";
-  }
+  if (isDatabaseSchemaError(err)) return "database_schema";
+  if (isDatabaseConnectionError(err)) return "database_unavailable";
   return "google_login_failed";
 }

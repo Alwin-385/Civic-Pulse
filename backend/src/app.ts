@@ -17,7 +17,7 @@ import departmentRoutes from "./routes/departmentRoutes";
 import notificationRoutes from "./routes/notificationRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 import prisma from "./config/prisma";
-import { DATABASE_UNAVAILABLE_MESSAGE } from "./utils/dbError";
+import { DATABASE_UNAVAILABLE_MESSAGE, isDatabaseSchemaError } from "./utils/dbError";
 import { getFrontendUrl, getGoogleCallbackUrl, isProduction } from "./config/env";
 
 const app = express();
@@ -82,13 +82,20 @@ app.get("/api/health/oauth", (_req, res) => {
 app.get("/api/health", async (_req, res) => {
   try {
     await Promise.race([
-      prisma.$queryRaw`SELECT 1`,
+      prisma.user.count(),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Database connection timed out")), 5000)
+        setTimeout(() => reject(new Error("Database connection timed out")), 20000)
       ),
     ]);
     return res.status(200).json({ ok: true, database: "connected" });
-  } catch {
+  } catch (err) {
+    if (isDatabaseSchemaError(err)) {
+      return res.status(503).json({
+        ok: false,
+        database: "schema_outdated",
+        message: "Database schema is outdated. Redeploy Render to run prisma db push.",
+      });
+    }
     return res.status(503).json({ ok: false, database: "unavailable", message: DATABASE_UNAVAILABLE_MESSAGE });
   }
 });
